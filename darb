@@ -56,8 +56,8 @@ if ARGV.empty? || ARGV.delete("-h") || ARGV.delete("--help")
     Kernel#empty_binding, which simply returns a new binding with
     no local variables.
     
-    AUTHOR  :    Joel VanderWerf, vjoel@path.berkeley.edu
-    VERSION :    0.4
+    AUTHOR  :    Joel VanderWerf, joelvanderwerf@gmail.com
+    VERSION :    0.5
     LICENSE :    Ruby license (credit appreciated), with no
                  restrictions on generated code.
   HELP

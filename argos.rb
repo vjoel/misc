@@ -70,7 +70,7 @@
 #
 # - There is no usage/help output.
 #
-# Copyright (C) 2006-2009 Joel VanderWerf, mailto:vjoel@users.sourceforge.net.
+# Copyright (C) 2006-2011 Joel VanderWerf, mailto:vjoel@users.sourceforge.net.
 #
 # License is the Ruby license. See http://www.ruby-lang.org.
 #
