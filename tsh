@@ -1,0 +1,165 @@
+#!/usr/bin/env ruby
+
+if ARGV.delete("-h") or ARGV.delete("--help")
+  puts <<-END
+    Usage:
+      #$0
+      #$0 uri
+      #$0 uri files...
+    
+    The first form starts a tuplespace server as a child process and prints
+    its uri. Then it enters an interactive session in which the current object
+    is the proxy to that tuplespace.
+    
+    The second form starts an interactive session in which the current object
+    is the proxy to the tuplespace at the given uri.
+    
+    The third form executes the given script files in a context where the
+    constant TS is the proxy to the tuplespace at the given uri.
+    
+    If the uri is of the form "@uri_file", read the uri from uri_file instead.
+    
+    Options:
+    
+    --write-uri file  write the uri to file, for use with "@uri_file"
+    
+    --count-threads   periodically display number of alive and dead threads.
+    
+  END
+  exit
+end
+
+topdir = File.dirname(File.dirname(File.expand_path(__FILE__)))
+libdir = File.join(topdir, "lib")
+$LOAD_PATH.unshift libdir
+
+require 'rinda/rinda'
+require 'argos'
+
+optdef = {
+  "write-uri"     => proc {|arg| arg },
+  "count-threads" => true
+}
+opts = Argos.parse_options(ARGV, optdef)
+
+count_threads = opts["count-threads"]
+write_uri = opts["write-uri"]
+
+uri = ARGV.shift
+
+if not uri
+  rd, wr = IO.pipe
+
+  server = fork do
+    rd.close
+    require 'rinda/tuplespace'
+    ts = Rinda::TupleSpace.new
+    DRb.start_service(nil, ts)
+    wr.puts DRb.uri
+    
+    trap("INT") do
+      # ^C in the irb session (parent process) should not kill the
+      # server (child process)
+    end
+    
+    if count_threads
+      n_alive_prev = 0
+      loop do
+        tl = Thread.list.dup
+        n_alive_now = tl.select {|t| t.alive?}.count
+        n_dead_now = tl.count - n_alive_now
+
+        if n_alive_now != n_alive_prev
+          n_alive_prev = n_alive_now
+          $stderr.puts "\nthreads: #{n_alive_now}; dead: #{n_dead_now}\n"
+        end
+
+        sleep 0.5
+      end
+    end
+    
+    DRb.thread.join
+  end
+
+  at_exit do
+    Process.kill "TERM", server
+    Process.wait server
+  end
+
+  wr.close
+  uri = rd.gets.chomp
+  puts "tuplespace is at #{uri}"
+  
+  if write_uri
+    File.open(write_uri, "w") do |f|
+      f.puts uri
+    end
+  end
+end
+
+if /^@(.*)/ =~ uri
+  uri = File.read($1).chomp
+end
+
+DRb.start_service
+ts = Rinda::TupleSpaceProxy.new(DRbObject.new_with_uri(uri))
+
+# Script mode
+if ARGV.size > 0
+  TS = ts
+  ARGV.each do |filename|
+    load filename
+  end
+  exit
+end
+
+# Interactive mode
+require 'irb'
+require 'irb/completion'
+
+module IRB
+  
+#  def IRB.parse_opts
+#    # Don't touch ARGV, which belongs to the app which called this module.
+#  end
+  
+  def IRB.start_session(*args)
+    unless $irb
+      IRB.setup nil
+      ## maybe set some opts here, as in parse_opts in irb/init.rb?
+    end
+
+    workspace = WorkSpace.new(*args)
+
+    if @CONF[:SCRIPT] ## normally, set by parse_opts
+      $irb = Irb.new(workspace, @CONF[:SCRIPT])
+    else
+      $irb = Irb.new(workspace)
+    end
+
+    @CONF[:IRB_RC].call($irb.context) if @CONF[:IRB_RC]
+    @CONF[:MAIN_CONTEXT] = $irb.context
+
+    trap 'INT' do
+      $irb.signal_handle
+    end
+    
+    custom_configuration if defined?(IRB.custom_configuration)
+
+    begin
+      catch :IRB_EXIT do
+        $irb.eval_input
+      end
+    ensure
+      IRB.irb_at_exit
+    end
+    
+    ## might want to reset your app's interrupt handler here
+  end
+end
+
+class Object
+  include IRB::ExtendCommandBundle # so that Marshal.dump works
+end
+
+IRB.start_session(ts)
