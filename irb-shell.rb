@@ -31,8 +31,12 @@ module IRB
     
     custom_configuration if defined?(IRB.custom_configuration)
 
-    catch :IRB_EXIT do
-      $irb.eval_input
+    begin
+      catch :IRB_EXIT do
+        $irb.eval_input
+      end
+    ensure
+      IRB.irb_at_exit
     end
     
     ## might want to reset your app's interrupt handler here
