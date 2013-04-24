@@ -4,12 +4,24 @@ require 'socket'
 class EasyTCP
   class Server
     attr_reader :name, :pid, :addr
+    
     def initialize name, pid, addr
       @name, @pid, @addr = name, pid, addr
     end
+    
+    def not_mine!
+      @not_mine = true
+      self
+    end
+    
+    def mine?
+      !@not_mine
+    end
   end
   
-  attr_reader :log, :servers, :clients
+  attr_accessor :log
+  attr_accessor :servers
+  attr_reader :clients
   
   def self.start log = Logger.new($stderr)
     et = new(log)
@@ -33,8 +45,10 @@ class EasyTCP
     end
     
     servers.each do |name, server|
-      log.info "stopping #{name.inspect}"
-      Process.kill "TERM", server.pid
+      if server.mine?
+        log.info "stopping #{name.inspect}"
+        Process.kill "TERM", server.pid
+      end
     end
   end
   
@@ -72,7 +86,7 @@ class EasyTCP
     conns = server_names.map {|sn| TCPSocket.new(*servers[sn].addr)}
     yield *conns if block_given?
   ensure
-    conns.each do |conn|
+    conns and conns.each do |conn|
       conn.close unless conn.closed?
     end
   end
