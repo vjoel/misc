@@ -110,9 +110,9 @@ class EasyServe
     FileUtils.remove_entry @tmpdir if @tmpdir
   end
   
-  def choose_socket_filename
+  def choose_socket_filename name
     @sock_counter ||= 0
-    name = File.join(tmpdir, "sock-#{@sock_counter}")
+    name = File.join(tmpdir, "sock-#{@sock_counter}-#{name}")
     @sock_counter += 1
     name
   end
@@ -120,7 +120,7 @@ class EasyServe
   def server name, proto = :unix
     server_class, *server_addr =
       case proto
-      when :unix; [UNIXServer, choose_socket_filename]
+      when :unix; [UNIXServer, choose_socket_filename(name)]
       when :tcp;  [TCPServer, '127.0.0.1', 0]
       else raise ArgumentError, "Unknown socket protocol: #{proto.inspect}"
       end
